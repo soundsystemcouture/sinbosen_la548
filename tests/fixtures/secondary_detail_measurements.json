@@ -1,0 +1,156 @@
+{
+  "sample_rate_hz": 48000,
+  "generator": [
+    {
+      "configured_frequency_hz": 20,
+      "configured_gain_db": -40.0,
+      "measured_peak_hz": 19.997059895387117,
+      "measured_rms_dbfs": -82.23183628862034,
+      "frequency_error_ppm": -147.00523064414827
+    },
+    {
+      "configured_frequency_hz": 100,
+      "configured_gain_db": -40.0,
+      "measured_peak_hz": 99.9848492637258,
+      "measured_rms_dbfs": -82.40509082206881,
+      "frequency_error_ppm": -151.50736274194276
+    },
+    {
+      "configured_frequency_hz": 1000,
+      "configured_gain_db": -40.0,
+      "measured_peak_hz": 999.8632316485955,
+      "measured_rms_dbfs": -82.4611065878026,
+      "frequency_error_ppm": -136.76835140452593
+    },
+    {
+      "configured_frequency_hz": 10000,
+      "configured_gain_db": -40.0,
+      "measured_peak_hz": 9998.612243655394,
+      "measured_rms_dbfs": -83.12616792397286,
+      "frequency_error_ppm": -138.77563446063056
+    },
+    {
+      "configured_frequency_hz": 20000,
+      "configured_gain_db": -40.0,
+      "measured_peak_hz": 19997.21864146707,
+      "measured_rms_dbfs": -83.33958673526294,
+      "frequency_error_ppm": -139.06792664653
+    },
+    {
+      "configured_frequency_hz": 1000,
+      "configured_gain_db": -60.0,
+      "measured_peak_hz": 0.755006734238733,
+      "measured_rms_dbfs": -108.71586177494633
+    },
+    {
+      "configured_frequency_hz": 1000,
+      "configured_gain_db": -50.0,
+      "measured_peak_hz": 999.863169824906,
+      "measured_rms_dbfs": -92.40416715100322,
+      "frequency_error_ppm": -136.83017509402706
+    },
+    {
+      "configured_frequency_hz": 1000,
+      "configured_gain_db": -30.0,
+      "measured_peak_hz": 999.8632155498183,
+      "measured_rms_dbfs": -72.4598062073048,
+      "frequency_error_ppm": -136.78445018172613
+    },
+    {
+      "configured_frequency_hz": 1000,
+      "configured_gain_db": -20.0,
+      "measured_peak_hz": 999.8632210465476,
+      "measured_rms_dbfs": -62.45926250296341,
+      "frequency_error_ppm": -136.77895345243218
+    }
+  ],
+  "generator_odd_harmonics_dbc_at_1khz_minus20db": {
+    "3": -28.323811861885567,
+    "5": -41.46277226884642,
+    "7": -50.2051417179807,
+    "9": -56.9609740505048,
+    "11": -62.39936500513737,
+    "13": -66.55929653038598
+  },
+  "frequency_shifter": [
+    {
+      "carrier_hz": 100,
+      "direction": 0,
+      "level": 0,
+      "relative_shift_hz": -0.9984371884862071
+    },
+    {
+      "carrier_hz": 100,
+      "direction": 0,
+      "level": 5,
+      "relative_shift_hz": -8.996751000905931
+    },
+    {
+      "carrier_hz": 100,
+      "direction": 1,
+      "level": 0,
+      "relative_shift_hz": 0.9984387013216178
+    },
+    {
+      "carrier_hz": 100,
+      "direction": 1,
+      "level": 5,
+      "relative_shift_hz": 8.996759094199305
+    },
+    {
+      "carrier_hz": 1000,
+      "direction": 0,
+      "level": 0,
+      "relative_shift_hz": -0.998442165832671
+    },
+    {
+      "carrier_hz": 1000,
+      "direction": 0,
+      "level": 5,
+      "relative_shift_hz": -8.996755787180746
+    },
+    {
+      "carrier_hz": 1000,
+      "direction": 1,
+      "level": 0,
+      "relative_shift_hz": 0.9984404550092449
+    },
+    {
+      "carrier_hz": 1000,
+      "direction": 1,
+      "level": 5,
+      "relative_shift_hz": 8.996752508115264
+    },
+    {
+      "carrier_hz": 10000,
+      "direction": 0,
+      "level": 0,
+      "relative_shift_hz": -0.9984378549925168
+    },
+    {
+      "carrier_hz": 10000,
+      "direction": 0,
+      "level": 5,
+      "relative_shift_hz": -8.996756837255816
+    },
+    {
+      "carrier_hz": 10000,
+      "direction": 1,
+      "level": 0,
+      "relative_shift_hz": 0.9984357088032993
+    },
+    {
+      "carrier_hz": 10000,
+      "direction": 1,
+      "level": 5,
+      "relative_shift_hz": 8.99675569927058
+    }
+  ],
+  "frequency_shifter_spur_pattern_dbc": {
+    "opposite_direction_3x": -28.65,
+    "desired_direction_5x": -42.01,
+    "opposite_direction_7x": -50.92,
+    "desired_direction_9x": -57.48,
+    "opposite_direction_11x": -62.85
+  }
+}

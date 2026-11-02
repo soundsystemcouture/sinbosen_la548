@@ -1,0 +1,56 @@
+[project]
+name = "sinbosen-la548"
+version = "1.0.0"
+description = "Linux client, CLI and web UI for the Sinbosen LA548 network audio DSP"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+ui = [
+    "gradio>=6.0,<7",
+    "numpy>=2.0,<3",
+    "scipy>=1.15,<2",
+    "plotly>=6.0,<7",
+]
+
+[project.scripts]
+sinbosen-la548 = "sinbosen_la548:main"
+sinbosen-la548-ui = "sinbosen_la548.ui:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.7",
+]
+hardware = [
+    "numpy>=2.5.3",
+]
+e2e = [
+    "playwright>=1.58,<2",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "plotly.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

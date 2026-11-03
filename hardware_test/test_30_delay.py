@@ -13,20 +13,19 @@ path delay.
 Raw measured lag includes a large, constant offset that has nothing to do
 with the LA548 - audio_io.py's startup_settle_s + pre_roll_s (~0.8s) of
 silence recorded before playback even starts, baked into the front of every
-capture. That's fine since it's identical on every step and cancels out of
-any delta.
+capture. The start offset between playback and capture also varies by about
+16 ms from one capture to the next, so absolute lags from separate captures
+can't be compared.
 
-Observed on the device: the *other*, untouched channel's absolute lag is not
-perfectly fixed either - it shifts by a small, roughly constant amount the
-moment any non-zero delay is introduced anywhere in the box (consistent with
-a shared delay-line buffer whose overall size/latency depends on the current
-max delay across channels, not just the swept one). That rules out an
-absolute "the untouched channel's lag must stay put" isolation check. Instead this
-compares the *differential* (swept channel's lag minus the untouched
-channel's lag) against configured ms - any shared drift cancels out of the
-subtraction, while a genuine isolation bug (both channels moving by the same
-amount as configured ms) would still show up as a flat, non-tracking
-differential.
+That rules out an absolute "the untouched channel's lag must stay put"
+isolation check. Instead this compares the *differential* (swept channel's
+lag minus the untouched channel's lag, from the same capture) against
+configured ms - the per-capture offset cancels out of the subtraction, while
+a genuine isolation bug (both channels moving by the same amount as
+configured ms) would still show up as a flat, non-tracking differential.
+test_a9_base_latency.py measures against a reference that bypasses the unit
+and confirms that a delay on another channel does not move a channel's
+latency.
 """
 
 from __future__ import annotations

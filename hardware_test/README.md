@@ -28,6 +28,15 @@ accident.
 - LA548 **output 1** → interface input 1
 - LA548 **output 2** → interface input 2
 
+For `test_a9` only, add a reference path that bypasses the LA548: Y-split
+the cable from interface output 1, keep one leg on LA548 input A, and run the
+other into a spare interface input. Name that input's capture channel in
+`LA548_HIL_REFERENCE_CHANNEL`. Keep phantom power off on it, since the split
+also connects it to LA548 input A, and set its gain so the capture doesn't
+clip. If LA548 input A stops passing signal once the split is in, put a
+transformer isolator on the reference leg. Without the variable, `test_a9`
+is skipped.
+
 "Output 1/2" and "input 1/2" here mean the first two channels named in
 `LA548_HIL_PLAYBACK_CHANNELS` and `LA548_HIL_CAPTURE_CHANNELS`. Use
 line-level inputs on the interface. Turn off any direct monitoring or
@@ -49,6 +58,7 @@ and B → output 2, and disconnects every other route from A and B.
 | `LA548_HIL_SOURCE` | yes | | PipeWire capture node name |
 | `LA548_HIL_PLAYBACK_CHANNELS` | no | `FL,FR` | Comma-separated channel names, at least two. The first two drive LA548 inputs A/B; any others play silence |
 | `LA548_HIL_CAPTURE_CHANNELS` | no | `FL,FR` | Comma-separated channel names, at least two. The first two record LA548 outputs 1/2 |
+| `LA548_HIL_REFERENCE_CHANNEL` | `test_a9` only | | Capture channel fed by the Y-split of interface output 1 (see "Wiring"). Must not be either of the first two capture channels |
 | `LA548_HIL_RATE` | no | `48000` | Sample rate for playback and capture |
 | `LA548_HIL_CARD` | with `LA548_HIL_PROFILE` | | pactl card whose profile to select before each test |
 | `LA548_HIL_PROFILE` | with `LA548_HIL_CARD` | | Profile to select on that card, e.g. `pro-audio` |
@@ -181,3 +191,4 @@ every channel's live settings. The restore fixture puts the
 | `test_a6_program_slots.py` | `save_program`/`load_program` round-trip a distinctive EQ state | Skipped unless `LA548_SCRATCH_PROGRAM_SLOT` is set. Passes on hardware: the reloaded level was within 0.1 dB of the saved one |
 | `test_a7_fir_win_type.py` | `win_type` selects distinct FIR shapes: Blackman-Harris stays measurably less attenuated than Hanning/Hamming just above the corner. The Kaiser/attenuation comparison is report-only | Passes |
 | `test_a8_fir_order.py` | `order_index` 0 and 1 both give a working low-pass near the configured corner. Steepness is reported, not graded | Passes; index 0 is measurably less steep than 1 |
+| `test_a9_base_latency.py` | Absolute input A → output 1 latency against the bypass reference, repeatable within one sample; `test_a91` reports any shift from a delay on output 2 or input B; an enabled FIR adds (N - 1) / 2 + 128 samples at 96 kHz in every band, on input A and output 1; its impulse response spans 256 or 512 taps; a Kaiser 21 dB FIR write on any channel adds 64 samples to every path | Skipped unless `LA548_HIL_REFERENCE_CHANNEL` is set. Passes; 1.732 ms base (2.399 ms after a Kaiser 21 dB write), unchanged by delay elsewhere; FIR adds 2.662 / 3.995 ms; 257 / 513 taps measured |

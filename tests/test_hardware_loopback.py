@@ -58,6 +58,26 @@ def test_one_error_names_every_missing_and_invalid_variable():
     assert "hardware_test/README.md" in message
 
 
+def test_the_reference_channel_is_optional_and_stripped():
+    assert LoopbackConfig.from_env(REQUIRED).reference_channel is None
+    config = LoopbackConfig.from_env({**REQUIRED, "LA548_HIL_CAPTURE_CHANNELS": "AUX2,AUX3",
+                                      "LA548_HIL_REFERENCE_CHANNEL": " AUX0 "})
+    assert config.reference_channel == "AUX0"
+
+
+@pytest.mark.parametrize("reference", ["AUX2", "AUX3"])
+def test_the_reference_channel_cannot_be_an_la548_output_capture(reference):
+    with pytest.raises(LoopbackConfigError, match="LA548_HIL_REFERENCE_CHANNEL"):
+        LoopbackConfig.from_env({**REQUIRED, "LA548_HIL_CAPTURE_CHANNELS": "AUX2,AUX3,AUX4",
+                                 "LA548_HIL_REFERENCE_CHANNEL": reference})
+
+
+def test_the_reference_channel_may_repeat_a_spare_capture_channel():
+    config = LoopbackConfig.from_env({**REQUIRED, "LA548_HIL_CAPTURE_CHANNELS": "AUX2,AUX3,AUX4",
+                                      "LA548_HIL_REFERENCE_CHANNEL": "AUX4"})
+    assert config.reference_channel == "AUX4"
+
+
 def test_the_error_is_a_value_error():
     with pytest.raises(ValueError, match="LA548_HIL_SINK"):
         LoopbackConfig.from_env({})

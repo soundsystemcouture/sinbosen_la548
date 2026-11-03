@@ -219,6 +219,19 @@ def transfer_function(
     return np.fft.rfftfreq(segment, d=1.0 / sample_rate), transfer
 
 
+def group_delay(reference: np.ndarray, captured: np.ndarray, sample_rate: int, f_lo: float, f_hi: float) -> float:
+    """Delay (seconds) of `captured` relative to `reference` from the slope of
+    their transfer function's phase over [f_lo, f_hi]. Resolves fractions of
+    a sample, unlike cross_correlate_delay; both columns must come from the
+    same capture (see transfer_function)."""
+    freqs, transfer = transfer_function(reference, captured, sample_rate)
+    band = (freqs >= f_lo) & (freqs <= f_hi)
+    if not band.any():
+        raise ValueError(f"no frequency bins in {f_lo:g}-{f_hi:g} Hz")
+    slope = np.polyfit(freqs[band], np.unwrap(np.angle(transfer[band])), 1)[0]
+    return float(-slope / (2 * np.pi))
+
+
 def phase_at_deg(freqs: np.ndarray, transfer: np.ndarray, freq_hz: float) -> float:
     """Wrapped phase (deg) of a complex response at `freq_hz`, interpolating
     real and imaginary parts so no unwrapping is involved."""

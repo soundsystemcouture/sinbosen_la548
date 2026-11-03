@@ -594,9 +594,10 @@ One channel's delay does not disturb another's. With one output held at
 0.6 ms and a second swept across 0-1200 ms, the two channels' relative
 alignment, read from the same simultaneous capture, stayed within
 0.02-0.14 ms of the expected value at every step, including the
-idle-to-active transition. Not covered: whether the unit's *absolute*
-latency against an external reference shifts when the delay engine goes
-from idle to active, and more than two channels delayed at once.
+idle-to-active transition. Measured against a reference that bypasses the
+unit, a 1 ms or 1000 ms delay on output 2 or input B leaves output 1's
+absolute latency unchanged (see "Latency"). Not covered: more than two
+channels delayed at once.
 
 Comparing absolute lag across *separate* captures is not valid: capture
 start-up jitter alone is about 16 ms with no writes at all. Compare
@@ -1083,11 +1084,18 @@ default FIR settings are window Kaiser and order 512.
   transition (0.21 octave between the -3 dB and -30 dB points, against
   0.10) and a ~6 dB shallower stopband (48 dB against ~54 dB) than
   index 1, reproducibly across three runs. Indices 1, 2 and 3 measured
-  identically. Half the taps doubling the transition width is consistent
-  with 0 = 256 and 1 = 512 taps, but the tap counts are not confirmed
-  directly. Indices 2 and 3 alias to 1 on this firmware; the
+  identically. Half the taps doubling the transition width fits 0 = 256
+  and 1 = 512 taps, and the impulse response confirms the counts
+  (`hardware_test/test_a9_base_latency.py`): with a rectangular window
+  (Kaiser at 21 dB), the FIR stage's response spans 256 and 512 taps at
+  96 kHz, within the 48 kHz capture's two-tap resolution (measured 257 and
+  513). Indices 2 and 3 alias to 1 on this firmware; the
   manufacturer's app offers only 256 and 512 for this model, so
   `set_fir` accepts only 0 and 1.
+- **Latency** (`hardware_test/test_a9_base_latency.py`): an enabled FIR is
+  linear phase and adds 2.662 ms (256 taps) or 3.995 ms (512 taps). A
+  Kaiser-window write at 21 dB attenuation on any channel also adds 0.667
+  ms to every path; see "Latency".
 
 Exposed as `registry.FIR_IN`/`FIR_OUT` + `Client.set_fir(channel_id, *,
 enabled, fir_type, win_type, freq_low_hz, freq_high_hz, attenuation_db,
@@ -1159,7 +1167,11 @@ measuring -22.97 dBFS, within 0.1 dB of the saved state.
 `write_fir_coefs(channel_id, coefficients, *, output=False)`, CLI
 `read-fir-coefs` / `write-fir-coefs`. Each channel's coefficient block is
 512 little-endian float32 values (2048 bytes). The API keeps the block as
-opaque bytes and assigns no tap semantics. Restore rejects any payload that
+opaque bytes and assigns no tap semantics. Enabling a parameter-designed FIR
+leaves the block unchanged: on input A and output 1, with the FIR enabled at
+either order, it read back as the same unit impulse
+(`hardware_test/test_a9_base_latency.py`), so the designed coefficients are
+not readable through 0xC8. Restore rejects any payload that
 is not exactly 2048 bytes or contains a non-finite float32, sends one
 complete block with `user_id=0` and the channel address, and the CLI
 command immediately reads the block back and checks it exactly.
@@ -1314,6 +1326,57 @@ traffic at all, so client traffic did not cause it. Both recovered with no
 lasting configuration change. The 0xD9 trial is not related: the device
 stayed reachable throughout it.
 
+### Latency
+
+**Confirmed on hardware (`hardware_test/test_a9_base_latency.py`).**
+
+**Base latency.** Analog input A to analog output 1 takes **1.732 ms**
+(166.3 samples at 96 kHz) with the path's processing flat (no EQ,
+crossover, dynamics or FIR enabled) and every delay at 0 ms. Three captures
+agreed within 0.1 µs, and the cross-correlation peak and the 1-4 kHz group
+delay agreed within one capture sample.
+
+**FIR writes can add 64 samples to every path.** After a FIR parameter
+write that uses the Kaiser window (window 0) at 21 dB attenuation, the
+bottom of its range, every path is 64 samples (0.667 ms) slower: input A to
+output 1 takes **2.399 ms**. A Kaiser write with any higher attenuation (22
+dB is enough) removes the extra delay, and writes with other windows leave
+it as it is. The state follows the most recent such write on any channel,
+with the FIR enabled or not, including channels outside the measured path
+(output 8, input D). A volume write does not change it. 21 dB is where the
+standard Kaiser formula gives beta = 0, a rectangular window. Every FIR
+block on the unit measured was stored at Kaiser 21 dB; the state at power-on
+was not tested. To get the shorter latency, make the last Kaiser-window FIR
+write use more than 21 dB, on any channel and with the FIR enabled or not.
+
+**Enabled FIR.** An enabled FIR adds (N - 1) / 2 + 128 samples at 96 kHz to
+its channel: **2.662 ms** for 256 taps (order index 0) and **3.995 ms** for
+512 taps (index 1). The (N - 1) / 2 part is a symmetric FIR's group delay;
+the 128 samples are a fixed extra. Input A and output 1 measured the same.
+With a 20 kHz low-pass, the added delay was the same from 200 Hz to 10 kHz
+within 1 µs, so the FIR is linear phase.
+
+**Delay elsewhere.** A 1 ms or 1000 ms delay on output 2 or on input B moved
+output 1's latency by less than 0.1 µs.
+
+**Polarity.** Against the reference, output 1 is inverted with both
+polarity fields at raw 0, matching "Polarity".
+
+**Method.** The interface output that drives input A was Y-split, with the
+second leg returning straight to the interface, and the latency is the
+LA548 path's lag minus that reference's lag from the same capture. The
+interface's own latency and the capture start-up jitter cancel. Absolute
+accuracy is a few microseconds, limited by the reference leg's transformer
+isolator and by the two interface inputs used; differences between
+settings, such as the FIR and Kaiser figures above, are free of both.
+Without the isolator, connecting the reference leg to the interface input
+made LA548 input A stop passing signal entirely.
+
+Not measured: other input/output pairs, FIR enabled on both the input and
+the output of one path, and the delay that IIR processing adds. IIR EQ and
+crossovers add frequency-dependent group delay (see
+[FILTER_MODELS.md](FILTER_MODELS.md)).
+
 ### Sample rate and clock offset
 
 No opcode reports the DSP's sample rate. The response models
@@ -1331,6 +1394,15 @@ within 0.25 dB / 8.2° at 48 kHz, 0.022 dB / 0.45° at 88.2 kHz and
 nominal rate, but it is inferred from responses, not read from the
 device. (The Bessel high-pass section table was fitted at 96 kHz, so it is
 not independent evidence.)
+
+FIR timing supports 96 kHz independently of those fits. A symmetric FIR of
+N taps delays by (N - 1) / 2 samples, a half-integer for even N, and an
+enabled FIR adds that plus a whole 128 samples (see "Latency"). Allowing
+for the unit's clock running about 140 ppm slow, the measured 2.6618 ms and
+3.9954 ms are 255.50 and 383.50 samples at 96 kHz, but 127.75 and 191.75
+samples at 48 kHz. The FIR's impulse response also spans 256 and 512 taps
+at 96 kHz, the two lengths the manufacturer's app offers. The profile still
+marks the rate unverified, since no opcode reports it.
 
 Separately, the unit's clock runs about 140-150 ppm slow relative to the
 measurement interface: the sine generator measured 136.8-139.1 ppm low
@@ -1378,10 +1450,11 @@ These pitfalls produced false results during hardware testing:
 - Settings snapshot: many inner fields remain unresolved (for example two
   base-block bytes); FIR coefficient blocks are treated as opaque.
 - EQ slope values other than 0/1 for non-shelf types; Dynamic EQ types 3
-  and 4; FIR types 2-4; FIR windows other than 0, 1, 2 and 5; the exact FIR
-  tap counts.
+  and 4; FIR types 2-4; FIR windows other than 0, 1, 2 and 5.
 - Polarity direction (which raw value is 0°).
 - Volume above +12 dB.
-- Delay: absolute latency when the delay engine goes idle to active, and
-  more than two channels delayed at once.
+- Delay: more than two channels delayed at once.
+- Latency of input/output pairs other than A to 1, and with FIR enabled on
+  both ends of one path; whether the Kaiser 21 dB latency state is set at
+  power-on.
 - Individual mix crosspoints beyond those exercised.

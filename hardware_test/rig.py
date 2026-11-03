@@ -4,7 +4,9 @@ Wiring: any audio interface with at least two outputs and two inputs, with
 playback and capture on one clock (normally the same device). The first two
 configured playback channels drive LA548 inputs A/B, and LA548 outputs 1/2
 feed the first two configured capture channels (see loopback.py and
-hardware_test/README.md). Channel_id 0/1 = physical A/B on the input side and
+hardware_test/README.md). An optional reference channel records a Y-split
+of the interface output that drives input A, bypassing the LA548
+(measure_with_reference). Channel_id 0/1 = physical A/B on the input side and
 physical output 1/2 on the output side, confirmed by test_00.
 
 If an output reads silent while its routing, mute and processing all read
@@ -44,6 +46,7 @@ class Rig:
         capture_channels: tuple[str, ...] = DEFAULT_CHANNELS,
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         settle_s: float = DEFAULT_SETTLE_S,
+        reference_channel: str | None = None,
     ) -> None:
         self.client = client
         self.sink_name = sink_name
@@ -52,6 +55,7 @@ class Rig:
         self.capture_channels = capture_channels
         self.sample_rate = sample_rate
         self.settle_s = settle_s
+        self.reference_channel = reference_channel
 
     @classmethod
     def connect(
@@ -76,6 +80,7 @@ class Rig:
             capture_channels=config.capture_channels,
             sample_rate=config.sample_rate,
             settle_s=settle_s,
+            reference_channel=config.reference_channel,
         )
 
     def __enter__(self) -> Rig:
@@ -87,6 +92,17 @@ class Rig:
     def measure(self, signal: np.ndarray, **play_kwargs: Any) -> np.ndarray:
         """Play `signal` and capture the LA548's response, with no write in between.
         Configured playback channels beyond the signal's own columns play silence."""
+        return self._play_and_record(signal, self.capture_channels, **play_kwargs)
+
+    def measure_with_reference(self, signal: np.ndarray, **play_kwargs: Any) -> np.ndarray:
+        """Like measure(), but the capture's columns are LA548 output 1, LA548
+        output 2 and the reference channel, in that order."""
+        if self.reference_channel is None:
+            raise RuntimeError("no reference channel configured (LA548_HIL_REFERENCE_CHANNEL)")
+        capture_channels = (*self.capture_channels[:2], self.reference_channel)
+        return self._play_and_record(signal, capture_channels, **play_kwargs)
+
+    def _play_and_record(self, signal: np.ndarray, capture_channels: tuple[str, ...], **play_kwargs: Any) -> np.ndarray:
         extra = len(self.playback_channels) - signal.shape[1] if signal.ndim == 2 else 0
         if extra > 0:
             signal = np.pad(signal, ((0, 0), (0, extra)))
@@ -95,7 +111,7 @@ class Rig:
             sink_name=self.sink_name,
             source_name=self.source_name,
             playback_channels=self.playback_channels,
-            capture_channels=self.capture_channels,
+            capture_channels=capture_channels,
             sample_rate=self.sample_rate,
             **play_kwargs,
         )

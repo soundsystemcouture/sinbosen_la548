@@ -142,6 +142,44 @@ def test_rig_plays_extra_configured_playback_channels_silent(monkeypatch):
     assert played["kwargs"]["sample_rate"] == 44100
 
 
+def test_measure_with_reference_records_both_outputs_then_the_reference(monkeypatch):
+    recorded = {}
+
+    def fake_play_and_record(signal, **kwargs):
+        recorded.update(kwargs)
+        return np.zeros((10, len(kwargs["capture_channels"])), dtype=np.float32)
+
+    monkeypatch.setattr(audio_io, "play_and_record", fake_play_and_record)
+    rig = Rig(None, sink_name="sink", source_name="source",  # type: ignore[arg-type]
+              playback_channels=("AUX0", "AUX1"), capture_channels=("AUX2", "AUX3", "AUX4"),
+              reference_channel="AUX0")
+    assert rig.measure_with_reference(np.ones((5, 1), dtype=np.float32)).shape == (10, 3)
+    assert recorded["capture_channels"] == ("AUX2", "AUX3", "AUX0")
+
+
+def test_measure_with_reference_needs_a_reference_channel():
+    rig = Rig(None, sink_name="sink", source_name="source")  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="LA548_HIL_REFERENCE_CHANNEL"):
+        rig.measure_with_reference(np.ones((5, 1), dtype=np.float32))
+
+
+@pytest.mark.parametrize("delay_samples", [0.0, 0.37, 96.5, 250.25])
+def test_group_delay_resolves_a_fractional_sample_delay(delay_samples):
+    rng = np.random.default_rng(3)
+    reference = rng.uniform(-0.1, 0.1, RATE)
+    freqs = np.fft.rfftfreq(len(reference), d=1.0 / RATE)
+    delayed = np.fft.irfft(np.fft.rfft(reference) * np.exp(-2j * np.pi * freqs * delay_samples / RATE),
+                           n=len(reference))
+    measured = analysis.group_delay(reference, -delayed, RATE, 1000.0, 4000.0)
+    assert measured * RATE == pytest.approx(delay_samples, abs=0.01)
+
+
+def test_group_delay_refuses_an_empty_band():
+    noise = np.random.default_rng(4).uniform(-0.1, 0.1, RATE)
+    with pytest.raises(ValueError, match="no frequency bins"):
+        analysis.group_delay(noise, noise, RATE, 30000.0, 40000.0)
+
+
 def _client_reading(snapshots: list) -> tuple[Client, FakeTransport]:
     transport = FakeTransport()
     client = Client.__new__(Client)

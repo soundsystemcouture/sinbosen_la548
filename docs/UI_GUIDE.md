@@ -92,7 +92,9 @@ curve CSV, and the displayed model notes. The Plotly mode bar also exports an im
 
 The channel plot models that channel's processing. The alignment view composes
 the selected input and each routed output. Neither includes loudspeaker, room,
-amplifier, converter latency, or unknown fixed device latency.
+amplifier, or the unit's fixed input-to-output latency (1.732 ms on input A to
+output 1, or 2.399 ms after a Kaiser 21 dB FIR write; see
+[PROTOCOL.md](PROTOCOL.md) "Latency").
 
 Coefficients are estimates: RBJ peaking (Q-corrected against hardware), measured shelf shapes,
 first- and second-order allpass/a negative-gain notch (with its measured
@@ -174,7 +176,9 @@ inputs and outputs. The management tab can download or restore the selected
 channel's exact 2048-byte coefficient backup. Restore validates all 512 float32
 values locally, requires a clean unlocked device, verifies exact coefficient
 readback and an unchanged settings snapshot, and attempts rollback after a readable
-mismatch. Enabled FIR remains an omitted response-model stage.
+mismatch. Enabled FIR remains an omitted response-model stage; it is linear phase
+and delays its channel by 2.662 ms (256 taps) or 3.995 ms (512 taps), which the
+alignment view does not include.
 
 Local preset JSON is versioned and profile-specific. Export captures the draft's
 supported controls; import stages changes with Live off. Presets omit names,

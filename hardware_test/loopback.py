@@ -12,6 +12,11 @@ environment (see hardware_test/README.md for how to find the names):
   any others play silence.
 - `LA548_HIL_CAPTURE_CHANNELS` (default `FL,FR`): at least two; the first
   two record LA548 outputs 1/2.
+- `LA548_HIL_REFERENCE_CHANNEL` (optional): a capture channel fed straight
+  from the interface output that drives LA548 input A (a Y-split), so it
+  carries the test signal without passing through the LA548. Only
+  test_a9_base_latency.py uses it. It must not be either of the first two
+  capture channels.
 - `LA548_HIL_RATE` (default 48000): sample rate for playback and capture.
 - `LA548_HIL_CARD` and `LA548_HIL_PROFILE` (optional, both or neither): a
   pactl card profile to select before running. Many USB interfaces expose
@@ -29,6 +34,7 @@ SINK_ENV = "LA548_HIL_SINK"
 SOURCE_ENV = "LA548_HIL_SOURCE"
 PLAYBACK_CHANNELS_ENV = "LA548_HIL_PLAYBACK_CHANNELS"
 CAPTURE_CHANNELS_ENV = "LA548_HIL_CAPTURE_CHANNELS"
+REFERENCE_CHANNEL_ENV = "LA548_HIL_REFERENCE_CHANNEL"
 RATE_ENV = "LA548_HIL_RATE"
 CARD_ENV = "LA548_HIL_CARD"
 PROFILE_ENV = "LA548_HIL_PROFILE"
@@ -51,6 +57,7 @@ class LoopbackConfig:
     sample_rate: int = DEFAULT_SAMPLE_RATE
     card: str | None = None
     profile: str | None = None
+    reference_channel: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> LoopbackConfig:
@@ -65,6 +72,12 @@ class LoopbackConfig:
             problems.append(f"{SOURCE_ENV} is not set (the PipeWire capture node name)")
         playback = _channels(env, PLAYBACK_CHANNELS_ENV, problems)
         capture = _channels(env, CAPTURE_CHANNELS_ENV, problems)
+        reference = _text(env, REFERENCE_CHANNEL_ENV) or None
+        if reference is not None and reference in capture[:2]:
+            problems.append(
+                f"{REFERENCE_CHANNEL_ENV}={reference!r} is one of the two capture channels that record "
+                "LA548 outputs 1/2; it needs its own channel"
+            )
         sample_rate = _sample_rate(env, problems)
         card = _text(env, CARD_ENV) or None
         profile = _text(env, PROFILE_ENV) or None
@@ -77,7 +90,7 @@ class LoopbackConfig:
                 "loopback audio interface is not configured: " + "; ".join(problems)
                 + " (see hardware_test/README.md)"
             )
-        return cls(sink, source, playback, capture, sample_rate, card, profile)
+        return cls(sink, source, playback, capture, sample_rate, card, profile, reference)
 
 
 def _text(env: Mapping[str, str], name: str) -> str:

@@ -31,7 +31,7 @@ model variant or sample rate.
 | Inputs / outputs | 4 / 8 | `read_mix_matrix` bus count and `channel_copy` widths on hardware; fixture |
 | Input / output EQ bands | 7 / 15 | Fixture band frequencies and block boundaries within each channel stride |
 | Input dynamic EQ bands | 3 | Fixture block boundaries; dynamic EQ writes confirmed by readback diff |
-| Model sample rate | 96000 Hz, assumed | Not read from device; the filter models in [FILTER_MODELS.md](FILTER_MODELS.md) fit measured responses at this rate |
+| Model sample rate | 96000 Hz | Not read from device; confirmed on hardware by the filter-model fits in [FILTER_MODELS.md](FILTER_MODELS.md) and by FIR timing (`hardware_test/test_a9_base_latency.py`); see [PROTOCOL.md](PROTOCOL.md) "Sample rate and clock offset" |
 | Input compressor | Unavailable | No input compressor block in this layout; an input compressor write leaves the readback unchanged on hardware |
 | Snapshot size | 2464 bytes | 2164 packed settings bytes plus 12 names of 25 bytes |
 
@@ -125,4 +125,4 @@ codec semantics; they do not establish the audible behavior of every field.
 
 Still open for opt-in hardware acceptance: compare decoded controls with the
 manufacturer's app for the active unit and confirm readback after deliberate
-changes. The sample rate is an assumption until it can be read from the device.
+changes. The sample rate is confirmed on hardware but not read from the device.

@@ -103,7 +103,8 @@ standard even-order Linkwitz–Riley, measured firmware-specific odd-order
 Linkwitz–Riley sections, magnitude-normalized Bessel low-pass, and Bessel
 high-pass sections calibrated against the LA548. See
 [FILTER_MODELS.md](FILTER_MODELS.md) for measurement coverage and limits.
-The 96 kHz model rate is provisional. Delay phase
+The models run at 96 kHz, the DSP rate confirmed on hardware (see
+[PROTOCOL.md](PROTOCOL.md) "Sample rate and clock offset"). Delay phase
 and pure-delay group delay are calculated analytically; per-section
 continuous phase prevents long-delay/cascade unwrap errors.
 
@@ -118,7 +119,7 @@ near numerical zero). Magnitude remains visible. Enabled unknown EQ types,
 unresolved EQ slopes, unsupported LR orders, FIR, dynamic EQ, dynamics, shifting,
 or unmodeled source selection mark totals incomplete and list omitted stages.
 An incomplete curve predicts only the stages explicitly modeled. Exact device
-coefficient agreement and sample rate require hardware comparison.
+coefficient agreement requires hardware comparison.
 
 ## Open Sound Meter traces
 

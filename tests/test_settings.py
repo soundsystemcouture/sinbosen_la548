@@ -18,7 +18,7 @@ def test_fixture_profile_and_names(snapshot):
     settings = decode_settings(snapshot)
     assert settings.profile == DA0408X
     assert settings.profile.sample_rate_hz == 96000
-    assert settings.profile.sample_rate_verified is False
+    assert settings.profile.sample_rate_verified is True
     assert settings.profile.supports_input_compressor is False
     assert len(settings.inputs) == 4
     assert len(settings.outputs) == 8

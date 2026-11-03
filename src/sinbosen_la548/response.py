@@ -14,7 +14,7 @@ from .settings import ChannelSettings, CrossoverSettings, DeviceSettings, EQBand
 type FloatArray = NDArray[np.float64]
 type ComplexArray = NDArray[np.complex128]
 
-MODEL_NOTE = "Estimated filter coefficients; the device's implementation and sample rate require verification."
+MODEL_NOTE = "Estimated filter coefficients; the device's implementation requires verification."
 
 # (section frequency / configured cutoff, Q); None denotes a first-order section.
 # Identified from simultaneous-reference hardware sweeps at 1 kHz, independently

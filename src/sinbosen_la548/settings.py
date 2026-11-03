@@ -33,7 +33,7 @@ DA0408X = DeviceProfile(
     output_eq_bands=15,
     dynamic_eq_bands=3,
     sample_rate_hz=96000,
-    sample_rate_verified=False,
+    sample_rate_verified=True,
     supports_input_compressor=False,
 )
 
@@ -306,7 +306,7 @@ def decode_settings(blob: bytes, *, profile: DeviceProfile = DA0408X) -> DeviceS
     Only DA0408X is implemented. Exact size, parameter invariants, and
     every mixer coordinate are checked; size alone is not model detection.
     Unresolved enum values and unused fields are preserved, not guessed.
-    sample_rate_hz comes from the provisional profile, not from the reply.
+    sample_rate_hz comes from the profile, not from the reply.
     """
     if profile != DA0408X:
         raise ValueError(f"unsupported settings profile: {profile.name}")

@@ -1381,28 +1381,31 @@ crossovers add frequency-dependent group delay (see
 
 No opcode reports the DSP's sample rate. The response models
 (`response.py`, [FILTER_MODELS.md](FILTER_MODELS.md)) and the settings
-profile assume **96 kHz**, and the profile marks it unverified
-(`sample_rate_verified=False`).
+profile use **96 kHz**. Two independent measurements below confirm it on
+hardware, so the profile marks it verified (`sample_rate_verified=True`).
 
-The basis is how well measured responses fit. The peaking, shelf, allpass
+The first is how well measured responses fit. The peaking, shelf, allpass
 and notch models are bilinear-transform designs with no fitted constants,
 so their shape depends on the assumed rate. Against the 55 recorded EQ
 responses in `tests/fixtures/` (the shelf, input-EQ and notch captures,
 50 Hz-15 kHz), they match within 0.022 dB / 0.19° at 96 kHz, but only
 within 0.25 dB / 8.2° at 48 kHz, 0.022 dB / 0.45° at 88.2 kHz and
 0.067 dB / 1.9° at 192 kHz. 96 kHz is therefore the best-supported
-nominal rate, but it is inferred from responses, not read from the
-device. (The Bessel high-pass section table was fitted at 96 kHz, so it is
+nominal rate on response shape alone, though 88.2 kHz fits nearly as
+well. (The Bessel high-pass section table was fitted at 96 kHz, so it is
 not independent evidence.)
 
-FIR timing supports 96 kHz independently of those fits. A symmetric FIR of
+The second, FIR timing, is independent of those fits. A symmetric FIR of
 N taps delays by (N - 1) / 2 samples, a half-integer for even N, and an
 enabled FIR adds that plus a whole 128 samples (see "Latency"). Allowing
 for the unit's clock running about 140 ppm slow, the measured 2.6618 ms and
 3.9954 ms are 255.50 and 383.50 samples at 96 kHz, but 127.75 and 191.75
 samples at 48 kHz. The FIR's impulse response also spans 256 and 512 taps
-at 96 kHz, the two lengths the manufacturer's app offers. The profile still
-marks the rate unverified, since no opcode reports it.
+at 96 kHz, the two lengths the manufacturer's app offers
+(`hardware_test/test_a9_base_latency.py`). At 88.2 kHz those spans would
+be 235 and 470 taps, and at 192 kHz the fixed part would be 255.5 samples
+rather than a whole number. The rate is still not read from the device, so
+a firmware running at another rate would go unnoticed.
 
 Separately, the unit's clock runs about 140-150 ppm slow relative to the
 measurement interface: the sine generator measured 136.8-139.1 ppm low

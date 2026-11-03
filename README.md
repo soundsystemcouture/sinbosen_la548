@@ -122,9 +122,9 @@ with Client("192.168.1.100") as client:
 ```
 
 This API performs one read and no writes, rejects incompatible snapshots, and
-preserves original bytes. The profile's 96 kHz sample rate is provisional; it
-is not read from the device. FIR parameters use an isolated adapter; coefficient
-payloads remain opaque. See [settings readback](docs/SETTINGS_READBACK.md).
+preserves original bytes. The profile's 96 kHz sample rate is confirmed on
+hardware but not read from the device. FIR parameters use an isolated
+adapter; coefficient payloads remain opaque. See [settings readback](docs/SETTINGS_READBACK.md).
 
 ## Local DSP Studio
 

@@ -299,7 +299,8 @@ def create_app(service: DSPService | None = None) -> DSPApp:
                 plot: figure,
                 coverage: model_coverage,
                 channel_info: f"**{ch.name}**\n\n{len(ch.eq_bands)} EQ slots · "
-                              f"{view.draft.profile.sample_rate_hz / 1000:g} kHz (provisional)",
+                              f"{view.draft.profile.sample_rate_hz / 1000:g} kHz"
+                              f"{'' if view.draft.profile.sample_rate_verified else ' (provisional)'}",
                 muted: ch.base.muted, inverted: ch.base.inverted, gain: ch.base.gain_db, delay: ch.base.delay_ms,
                 selection: gr.update(choices=[(c.name, f"{'out' if c.output else 'in'}:{c.channel_id}")
                                               for c in (*view.draft.inputs, *view.draft.outputs)], value=choice),

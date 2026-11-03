@@ -1382,7 +1382,10 @@ ReadGroup replies carried `user_id` 29. After a power cycle the settings
 snapshot matched the snapshot taken just before that save in every
 control. Before the save the current program was slot 0, and the earlier
 power cycle came back in slot 0's state. A later load of slot 0 switched
-the replies' `user_id` from 29 to 0 at the load's ack.
+the replies' `user_id` from 29 to 0 at the load's ack, and the next power
+cycle came back in slot 0's state with slot 0's coefficient blocks. The
+front panel kept showing "Scene: User30" until that power cycle: it does
+not redraw after a load over the network.
 
 **A program slot keeps the FIR coefficient blocks.** The slot-29 save
 included output 1 at FIR type 6 with an impulse at tap 100. After the power

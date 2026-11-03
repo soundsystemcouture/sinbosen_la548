@@ -195,7 +195,8 @@ The DA0408X exposes 30 program slots with zero-based wire indices 0–29. Save r
 current device settings, while load replaces all channels and routes. Applied changes
 live only in the unit's working settings and are lost at power-off unless saved to a
 slot. The unit powers on into its current program, shown on its front panel as
-"Scene: UserN"; saving or loading a slot makes that slot current. Channel copy
+"Scene: UserN"; saving or loading a slot makes that slot current. After a load from this UI the
+panel keeps showing the previous scene until the next power cycle. Channel copy
 is within the selected input/output direction. Review
 destinations with **Review destinations** and confirm before execution; pending drafts must be applied or
 reverted. Each operation disables Live and reloads actual settings, including

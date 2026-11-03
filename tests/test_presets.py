@@ -65,3 +65,9 @@ def test_fir_adapter_current_codec_and_da0408x_order_capability(settings):
     for output in (False, True):
         with pytest.raises(ValueError, match="0 or 1"):
             replace(params, order_index=2).snapshot(output=output)
+
+
+def test_fir_adapter_round_trips_the_stored_coefficient_block_type(settings):
+    """The device stores FIR type 5 as 6, so a readback of 6 must write back unchanged."""
+    stored = replace(FIRParameters.read(settings.outputs[0].fir), fir_type=6)
+    assert FIRParameters.read(stored.snapshot(output=True)) == stored

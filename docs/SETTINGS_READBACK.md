@@ -104,8 +104,9 @@ the full original slot remains available as `name_raw`, including bytes after NU
   [FILTER_MODELS.md](FILTER_MODELS.md).
   Readback does not silently zero an allpass band's stored gain or slope.
 - `FIRSnapshot.from_bytes()` validates the 9-byte boundary and enable flag only.
-  Its `enabled` and `raw` fields are independent of the evolving FIR codecs and
-  coefficient interpretation.
+  It holds the enable flag and the raw 9 bytes; `fir_adapter.FIRParameters`
+  decodes the fields. A FIR set to type 5 reads back as type 6 (see
+  [PROTOCOL.md](PROTOCOL.md), "FIR coefficient backup and restore").
 - All models are frozen dataclasses; collections are tuples; raw buffers are
   owned immutable bytes, even when the caller supplies a mutable buffer.
 

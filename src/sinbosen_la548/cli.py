@@ -591,7 +591,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_fir.add_argument("channel", type=int)
     p_fir.add_argument("state", choices=["on", "off"])
     p_fir.add_argument(
-        "--type", type=int, required=True, metavar="N", help="0=LP,1=HP,2=BP,3=BS,4=AllPass", dest="type"
+        "--type",
+        type=int,
+        required=True,
+        metavar="N",
+        help="0=LP,1=HP,2=BP,5=coefficient block (applied once write-fir-coefs runs after this; reads back as 6)",
+        dest="type",
     )
     p_fir.add_argument(
         "--win-type",
@@ -652,7 +657,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_writefir = sub.add_parser(
         "write-fir-coefs",
-        help="Restore and verify one channel's exact 2048-byte DA0408X FIR coefficient backup",
+        help="Write and verify one channel's exact 2048-byte DA0408X FIR coefficient block (FIR type 5 applies it)",
     )
     p_writefir.add_argument("ip")
     p_writefir.add_argument("channel", type=int)

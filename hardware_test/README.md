@@ -58,7 +58,7 @@ and B → output 2, and disconnects every other route from A and B.
 | `LA548_HIL_SOURCE` | yes | | PipeWire capture node name |
 | `LA548_HIL_PLAYBACK_CHANNELS` | no | `FL,FR` | Comma-separated channel names, at least two. The first two drive LA548 inputs A/B; any others play silence |
 | `LA548_HIL_CAPTURE_CHANNELS` | no | `FL,FR` | Comma-separated channel names, at least two. The first two record LA548 outputs 1/2 |
-| `LA548_HIL_REFERENCE_CHANNEL` | `test_a9` only | | Capture channel fed by the Y-split of interface output 1 (see "Wiring"). Must not be either of the first two capture channels |
+| `LA548_HIL_REFERENCE_CHANNEL` | `test_a9`, `test_b0` | | Capture channel fed by the Y-split of interface output 1 (see "Wiring"). Must not be either of the first two capture channels |
 | `LA548_HIL_RATE` | no | `48000` | Sample rate for playback and capture |
 | `LA548_HIL_CARD` | with `LA548_HIL_PROFILE` | | pactl card whose profile to select before each test |
 | `LA548_HIL_PROFILE` | with `LA548_HIL_CARD` | | Profile to select on that card, e.g. `pro-audio` |
@@ -146,9 +146,10 @@ EQ, crossover, dynamics, FIR parameters or input-source changes behind for
 later tests. A restore that doesn't verify is reported as a test error.
 
 FIR coefficient blocks and program slots are outside `read_settings()` and
-are **not** restored. Back up FIR coefficients first with
-`uv run sinbosen-la548 read-fir-coefs` if you need them. After a full run
-they were unchanged.
+are **not** restored by the fixture. `test_b0_fir_coefficients.py` writes
+its own blocks back and checks them by readback; back up FIR coefficients
+first with `uv run sinbosen-la548 read-fir-coefs` if you need them. After a
+full run they were unchanged.
 
 ## Program slots (`test_a6`)
 
@@ -192,3 +193,4 @@ every channel's live settings. The restore fixture puts the
 | `test_a7_fir_win_type.py` | `win_type` selects distinct FIR shapes: Blackman-Harris stays measurably less attenuated than Hanning/Hamming just above the corner. The Kaiser/attenuation comparison is report-only | Passes |
 | `test_a8_fir_order.py` | `order_index` 0 and 1 both give a working low-pass near the configured corner. Steepness is reported, not graded | Passes; index 0 is measurably less steep than 1 |
 | `test_a9_base_latency.py` | Absolute input A → output 1 latency against the bypass reference, repeatable within one sample; `test_a91` reports any shift from a delay on output 2 or input B; an enabled FIR adds (N - 1) / 2 + 128 samples at 96 kHz in every band, on input A and output 1; its impulse response spans 256 or 512 taps; a Kaiser 21 dB FIR write on any channel adds 64 samples to every path | Skipped unless `LA548_HIL_REFERENCE_CHANNEL` is set. Passes; 1.732 ms base (2.399 ms after a Kaiser 21 dB write), unchanged by delay elsewhere; FIR adds 2.662 / 3.995 ms; 257 / 513 taps measured |
+| `test_b0_fir_coefficients.py` | FIR type 5 convolves the channel with its coefficient block: an impulse at tap d adds 128 + d samples at 96 kHz in every band, on input A and output 1; values are used as given (0.5 is -6 dB, -0.5 inverts) and an all-zero block silences; order index 0 uses 256 values, 1 all 512; a disabled FIR and type 0 ignore the block; the device stores 5 as 6; selecting type 5 does not load the block, and later parameter writes keep it | Skipped unless `LA548_HIL_REFERENCE_CHANNEL` is set (except `test_b00`). Passes; 128.02 / 228.03 / 328.04 samples for taps 0 / 100 / 200; -6.02 dB; zero block 61 dB down |

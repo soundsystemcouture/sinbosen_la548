@@ -217,8 +217,11 @@ class Client:
     def read_group(self, *, timeout: float = 2.0) -> bytes:
         """Read the opaque settings blob for the currently active group.
 
-        Opcode 0xA9, user_id=0, everything else default, empty payload;
-        read-only. Returns the raw blob; use read_settings() for the
+        Opcode 0xA9, all-default header fields (user_id=0), empty payload;
+        read-only. The reply is matched by opcode only: its user_id is the
+        unit's current program slot, not an echo of the request's, so a
+        unit whose current program isn't slot 0 would never match
+        (docs/PROTOCOL.md). Returns the raw blob; use read_settings() for the
         supported DA0408X layout. Other layouts remain opaque. There is no
         matching write_group(): WriteGroup (0xA8) is a single whole-blob
         frame, not chunked, but it overwrites every setting at once, its
@@ -226,7 +229,7 @@ class Client:
         it is safe without the accompanying per-channel FIR-coefficient
         restore (0xC9, see write_fir_coefs) is unverified (docs/PROTOCOL.md).
         """
-        frame = self._transport.request(Opcode.READ_GROUP, user_id=0, timeout=timeout)
+        frame = self._transport.request(Opcode.READ_GROUP, timeout=timeout)
         return frame.payload
 
     def read_settings(
@@ -825,7 +828,22 @@ class Client:
         Like Mix matrix/Input Source, this sends the *whole* FIR struct as
         one 0xA4 payload - all seven fields are always required (see
         `registry.FIR_IN`/`FIR_OUT`). `fir_type`: 0=low-pass, 1=high-pass,
-        2=band-pass, 3=band-stop, 4=all-pass. `attenuation_db` has a
+        2=band-pass, 5=the channel's coefficient block (`write_fir_coefs`)
+        instead of a filter the device designs. The device stores 5 as 6,
+        and writing 6 behaves the same, so a readback can be written back.
+        These are the only values the manufacturer's app sends; 3 and 4 are
+        rejected.
+
+        **Selecting 5 does not load the block** (confirmed on hardware,
+        `hardware_test/test_b0_fir_coefficients.py`): the previous filter
+        keeps running until a block is written with `write_fir_coefs`, as
+        the manufacturer's app does right after selecting 5 on import. From
+        then on, further `set_fir` calls with 5 or 6 keep the block. Order
+        index 0 uses its first 256 values and 1 uses all 512. The block adds
+        128 samples at 96 kHz on top of its own delay, like a designed FIR.
+        Window, frequencies and attenuation have no effect on it.
+
+        `attenuation_db` has a
         confirmed `raw = display - 21.0` formula and the manufacturer's
         app's 21-120 dB range (docs/PROTOCOL.md, "Value bounds") - see
         `win_type` below for why that exact floor is itself a real clue,
@@ -861,12 +879,8 @@ class Client:
         `freq_high_hz` has no measurable effect at all; for `fir_type=1`
         (high-pass), it's the other way around - `freq_high_hz` is the real
         corner and `freq_low_hz` has no effect. Neither field's name is a
-        reliable guide by itself (plausibly this is one generic band-pass/
-        band-stop primitive under the hood, with LP/HP as the two special
-        cases of pushing one edge out past the band of interest, but that's
-        inference - only the LP/HP cases above are actually measured, not
-        band-pass/band-stop/all-pass). Both fields are raw Hz with no
-        confirmed range beyond the u16 wire width.
+        reliable guide by itself, and band-pass (`fir_type=2`) is not
+        measured. Both fields are raw Hz, range 10-20000 Hz.
         """
         spec = FIR_OUT if output else FIR_IN
         _require_index(order_index, "FIR order_index", 2)
@@ -911,7 +925,12 @@ class Client:
         `slot` is a 0-based index (0-29) into the device's 30 program
         slots; `timeout` defaults to 5 s. This does not touch live audio
         state - it's a snapshot, the lowest-risk of the whole-device
-        operations.
+        operations. Saving is how a configuration is kept: every other
+        write changes only the live settings, which a power cycle discards.
+        Saving also makes `slot` the current program, the one the unit
+        powers on into, FIR coefficient blocks included (observed on
+        hardware; see docs/PROTOCOL.md, "A power cycle discards live
+        changes").
 
         Confirmed on hardware (`hardware_test/test_a6_program_slots.py`)
         together with
@@ -938,7 +957,10 @@ class Client:
 
         This method does **not** re-read FIR coefficient data (0xC8)
         afterward. Call `read_fir_coefs` per channel yourself if you need
-        the loaded program's coefficients.
+        the loaded program's coefficients. Loading replaces them with the
+        slot's own and makes `slot` the current program, the one the unit
+        powers on into (observed on hardware; see docs/PROTOCOL.md, "A
+        power cycle discards live changes").
 
         Confirmed on hardware (`hardware_test/test_a6_program_slots.py`,
         against slot 0 on a unit confirmed to have no slots in use): saved
@@ -958,9 +980,11 @@ class Client:
 
         DA0408X returns one 512-float32/2048-byte block per channel
         (confirmed on hardware); any other size or a non-finite value is
-        rejected. The public boundary remains opaque bytes so backup and
-        restore preserve every bit without depending on coefficient
-        interpretation. `timeout` defaults to 1.8 s.
+        rejected. The values are the taps FIR type 5 applies (see
+        `set_fir`); a designed FIR (types 0-2) leaves the block unchanged
+        and its own coefficients are not readable. The block is returned
+        as raw bytes, never reinterpreted, so a backup restores every bit.
+        `timeout` defaults to 1.8 s.
         """
         channel_type = ChannelType.OUT if output else ChannelType.IN
         _require_index(channel_id, "output channel_id" if output else "input channel_id", 8 if output else 4)
@@ -982,7 +1006,7 @@ class Client:
         output: bool = False,
         timeout: float = 1.8,
     ) -> Frame:
-        """Restore one DA0408X channel's opaque FIR coefficient block.
+        """Write one DA0408X channel's FIR coefficient block.
 
         The DA0408X layout contains exactly 512 packed ``float32`` values
         (2048 bytes) per input and output channel. The restore sends one
@@ -990,8 +1014,15 @@ class Client:
         channel addressing used by :meth:`read_fir_coefs`. Exact
         changed-byte readback and restoration are confirmed on hardware.
 
-        The bytes are deliberately kept opaque so backups round-trip exactly;
-        this method does not reinterpret, resize, or synthesize coefficients.
+        With FIR type 5 selected (`set_fir`), the channel is convolved with
+        the block, tap 0 first, at 96 kHz, values used as given, plus 128
+        samples of fixed latency (confirmed on hardware,
+        `hardware_test/test_b0_fir_coefficients.py`). Selecting type 5
+        does not load the block, so write it after `set_fir`. With types
+        0-2 or the FIR disabled the block is stored but not applied.
+
+        The bytes are sent as given, never reinterpreted, so backups
+        round-trip exactly; this method does not resize or synthesize coefficients.
         It rejects every size other than the pinned DA0408X layout before any
         datagram is sent.
         """

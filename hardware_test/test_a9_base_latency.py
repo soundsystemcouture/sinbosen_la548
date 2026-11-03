@@ -160,9 +160,9 @@ def _noise(rig: Rig) -> np.ndarray:
 
 def _set_fir(rig: Rig, channel_id: int, *, output: bool, enabled: bool = False, order_index: int = 1,
              win_type: int = KAISER, attenuation_db: float = FAST_ATTENUATION_DB,
-             corner_hz: int = FIR_PASS_CORNER_HZ) -> None:
+             corner_hz: int = FIR_PASS_CORNER_HZ, fir_type: int = 0) -> None:
     rig.client.set_fir(
-        channel_id, enabled=enabled, fir_type=0, win_type=win_type, freq_low_hz=corner_hz,
+        channel_id, enabled=enabled, fir_type=fir_type, win_type=win_type, freq_low_hz=corner_hz,
         freq_high_hz=FIR_PASS_CORNER_HZ, attenuation_db=attenuation_db, order_index=order_index, output=output,
     )
     time.sleep(rig.settle_s)

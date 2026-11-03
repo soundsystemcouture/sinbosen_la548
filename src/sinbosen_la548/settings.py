@@ -144,10 +144,10 @@ class FrequencyShifterSettings:
 
 @dataclass(frozen=True)
 class FIRSnapshot:
-    """Stable boundary for concurrent FIR work: enable flag plus opaque bytes.
+    """FIR parameter block: enable flag plus the raw 9 bytes.
 
-    No dependency on the evolving FIR parameter/coefficient interpretation.
-    This block is not the separate read_fir_coefs() payload.
+    `fir_adapter.FIRParameters` decodes the fields. This is not the
+    separate read_fir_coefs() coefficient block.
     """
 
     enabled: bool

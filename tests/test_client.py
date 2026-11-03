@@ -6,8 +6,9 @@ from conftest import client_with_fake_transport
 
 from sinbosen_la548 import codecs
 from sinbosen_la548.client import Client
-from sinbosen_la548.protocol import Opcode
+from sinbosen_la548.protocol import Frame, Opcode
 from sinbosen_la548.registry import BLOCKED, REGISTRY, ChannelType
+from sinbosen_la548.transport import Transport
 
 
 def test_set_mute_defaults_to_input_and_encodes_inverted():
@@ -467,6 +468,23 @@ def _read_group_sample() -> bytes:
     return path.read_bytes()
 
 
+@pytest.mark.parametrize("current_program", [0, 29])
+def test_read_group_accepts_a_reply_carrying_the_current_program(current_program):
+    # The 0xA9 reply's user_id is the unit's current program slot, not an
+    # echo of the request's 0: after a save to slot 29 it was 29, before and
+    # after a power cycle. Matching on user_id would time out on such a unit.
+    transport = Transport("127.0.0.1", 8087)
+    transport._sock.close()
+    reply = Frame(opcode=Opcode.READ_GROUP, version=0x13, user_id=current_program, payload=b"blob")
+    transport.send = lambda *a, **k: transport._inbox.put(reply)  # type: ignore[method-assign]
+    client = Client.__new__(Client)
+    client._transport = transport
+    try:
+        assert client.read_group(timeout=1.0) == b"blob"
+    finally:
+        transport.stop()
+
+
 def test_read_mix_matrix_decodes_confirmed_layout():
     client, fake = client_with_fake_transport()
     fake.responses[Opcode.READ_GROUP] = _read_group_sample()
@@ -843,13 +861,15 @@ def test_set_xover_rejects_unsupported_filter_type():
     assert fake.calls == []
 
 
-def test_set_fir_rejects_unsupported_fir_type():
+@pytest.mark.parametrize("fir_type", [3, 4, 7, 255])
+def test_set_fir_rejects_unsupported_fir_type(fir_type):
+    """The manufacturer's app sends only 0, 1, 2, 5 and 6."""
     client, fake = client_with_fake_transport()
     with pytest.raises(ValueError, match="FIR filter type out of range"):
         client.set_fir(
             0,
             enabled=True,
-            fir_type=255,
+            fir_type=fir_type,
             win_type=0,
             freq_low_hz=80,
             freq_high_hz=8000,
@@ -857,6 +877,24 @@ def test_set_fir_rejects_unsupported_fir_type():
             order_index=0,
         )
     assert fake.calls == []
+
+
+@pytest.mark.parametrize("fir_type", [5, 6])
+def test_set_fir_accepts_coefficient_block_type(fir_type):
+    """5 selects the coefficient block; the device stores it as 6."""
+    client, fake = client_with_fake_transport()
+    client.set_fir(
+        0,
+        enabled=True,
+        fir_type=fir_type,
+        win_type=0,
+        freq_low_hz=80,
+        freq_high_hz=8000,
+        attenuation_db=30.0,
+        order_index=1,
+        output=True,
+    )
+    assert fake.calls[0][1][1] == fir_type
 
 
 @pytest.mark.parametrize(

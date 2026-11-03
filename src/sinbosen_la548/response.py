@@ -371,7 +371,7 @@ def channel_response(channel: ChannelSettings, frequencies: FloatArray | None = 
                                   eq_response(eq, frequencies, sample_rate_hz=sample_rate_hz)))
     notes = [MODEL_NOTE]
     if channel.fir.enabled:
-        notes.append("Enabled FIR omitted: coefficients and FIR interpretation are not integrated yet.")
+        notes.append("Enabled FIR is not included in this plot.")
     if any(b.enabled for b in channel.dynamic_eq_bands):
         notes.append("Dynamic EQ is level dependent and omitted from the static response.")
     if any(b is not None and b.enabled for b in (channel.compressor, channel.limiter, channel.expander)):

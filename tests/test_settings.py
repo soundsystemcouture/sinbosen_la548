@@ -297,7 +297,7 @@ def test_read_settings_performs_exactly_one_read_and_no_writes(snapshot):
     client, fake = client_with_fake_transport()
     fake.responses[Opcode.READ_GROUP] = snapshot
     assert client.read_settings() == decode_settings(snapshot)
-    assert fake.calls == [(Opcode.READ_GROUP, b"", {"user_id": 0})]
+    assert fake.calls == [(Opcode.READ_GROUP, b"", {})]
 
 
 def test_read_settings_forwards_timeout(snapshot, monkeypatch):
@@ -328,4 +328,4 @@ def test_read_settings_rejects_empty_reply_without_any_writes():
     client, fake = client_with_fake_transport()
     with pytest.raises(ValueError, match="got 0"):
         client.read_settings()
-    assert fake.calls == [(Opcode.READ_GROUP, b"", {"user_id": 0})]
+    assert fake.calls == [(Opcode.READ_GROUP, b"", {})]

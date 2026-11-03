@@ -48,10 +48,10 @@ Requests and replies have the same shape:
 | 0-1 | 2 | `0x5A 0x5A` | sync |
 | 2 | 1 | linkage | link-group mask (see below); the client always sends 0 |
 | 3 | 1 | device_number | echoed in replies |
-| 4 | 1 | version / machine model | requests use `10` (0x0A). Replies are opcode-dependent: `10` on normal reads, `19` (0x13) on HandShake (0xA1) and 0xD9 replies (observed) |
+| 4 | 1 | version / machine model | requests use `10` (0x0A). Replies are opcode-dependent: `10` on normal reads, `19` (0x13) on HandShake (0xA1), ReadGroup (0xA9) and 0xD9 replies (observed) |
 | 5 | 1 | **opcode** | see "Opcodes" |
 | 6 | 1 | channel_type | 0 = input, 1 = output, 2 = mix matrix, 3 = default |
-| 7 | 1 | user_id | program slot for 0xAB/0xAC; 0 otherwise |
+| 7 | 1 | user_id | program slot for 0xAB/0xAC; 0 otherwise. HandShake (0xA1) and ReadGroup (0xA9) replies carry the unit's current program slot here instead |
 | 8 | 1 | channel_id | 0-based channel a write addresses. **Meaningful for 0xA4**, never a free default (see "Unsafe opcodes") |
 | 9 | 1 | module_id | processing block a 0xA4 write addresses. **Meaningful for 0xA4** |
 | 10 | 1 | data_id | sub-selector within a module; see "Parameter IDs" |
@@ -99,7 +99,11 @@ reply on opcode plus every header field the request set (`channel_type`,
 `user_id`, `channel_id`, `module_id`, `data_id`). `version` is excluded
 because replies use an opcode-dependent value. Confirmed on hardware: the
 device echoes those header fields on 0xA4 acks for every implemented
-control. The exception is 0xB6, matched by opcode only (see "Opcodes").
+control. The exceptions are 0xB6 and 0xA9, matched by opcode only (see
+"Opcodes"). A 0xA9 reply's `user_id` is the current program slot, not an
+echo: after a save to slot 29 every reply carried 29, before and after a
+power cycle, so a request matched on `user_id=0` timed out although the
+complete reply had arrived.
 
 After a timeout the transport does the following:
 
@@ -192,14 +196,14 @@ The constant column is the client's `protocol.Opcode` member.
 | 0xA1 | `HAND_SHAKE` | keepalive / meter poll | **Confirmed on hardware** | empty request; ~60-byte meter reply (see "Keepalive and meter levels") |
 | 0xB6 | `READ_LOCK_STATE` | panel lock state | **Confirmed on hardware** | reply is 5 bytes: locked flag + 4 ASCII-digit PIN, e.g. `b"\x000000"` = `locked=False, pin="0000"`. The firmware has replied with `channel_id=1` to the all-zero-header request, so the client matches this reply by opcode only |
 | 0xCA | `GET_USER_NAME` | program-slot names | **Confirmed on hardware** | 750 bytes: 30 program names as 25-byte NUL-padded UTF-8 slots. `get_program_names()`; `get_user_name()` is a slot-0 alias |
-| 0xA9 | `READ_GROUP` | settings snapshot | **Confirmed on hardware** | request `user_id=0`. Reply is 2464 bytes: 2164 packed settings bytes plus twelve 25-byte channel names. `read_settings()` decodes the DA0408X layout; other models' layouts are not supported |
+| 0xA9 | `READ_GROUP` | settings snapshot | **Confirmed on hardware** | request `user_id=0`; the reply's `user_id` is the current program slot, so it is matched by opcode only. Reply is 2464 bytes: 2164 packed settings bytes plus twelve 25-byte channel names. `read_settings()` decodes the DA0408X layout; other models' layouts are not supported |
 | 0xA4 | `WRITE_MODULE_ID` | parameter write | **Confirmed on hardware** for every control in "Implemented controls" | the one generic write for every per-channel control; its meaning is set entirely by `channel_type`/`channel_id`/`module_id`/`data_id`/payload. **Default header fields are a real write** (see "Unsafe opcodes"). Only ever built through the registry (see "Write path") |
 | 0xAF | `EQ_ALL_BYPASS` | bypass all EQ bands of a channel | **Refused by the client**: no reply, no effect | `hardware_test/test_70_eq_bypass_polarity.py`; see "EQ all-bypass and all-reset" |
 | 0xB0 | `EQ_ALL_RESET` | reset all EQ bands of a channel | **Refused by the client**: acks, changes nothing | `hardware_test/test_72_eq_all_reset.py` |
 | 0xA8 | `WRITE_GROUP` | write settings snapshot | **Not implemented** | see "Not implemented" |
 | 0xD9 | `READ_DEVICE_ID` | model string | **Refused by the client** after one controlled trial | slow, model-specific, disturbs request sequencing; see "ReadDeviceId (0xD9)" |
 | 0xC8 | `READ_FIR_COEFS` | read one channel's FIR coefficients | **Confirmed on hardware** | empty request; 2048-byte reply = 512 float32 LE values (`Client.read_fir_coefs`) |
-| 0xC9 | `WRITE_FIR_COEFS` | write one channel's FIR coefficients | **Confirmed by readback** | one complete 2048-byte block per channel; changed-byte readback and exact restoration confirmed on input B and output 2 (`Client.write_fir_coefs`) |
+| 0xC9 | `WRITE_FIR_COEFS` | write one channel's FIR coefficients | **Confirmed on hardware** | one complete 2048-byte block per channel; exact readback and restoration; FIR type 5 convolves the channel with it (`Client.write_fir_coefs`, `hardware_test/test_b0_fir_coefficients.py`) |
 | 0xAB | `DEVICE_PROGRAM_SAVE` | save live state to a program slot | **Confirmed on hardware** | `hardware_test/test_a6_program_slots.py`; see "Whole-device operations" |
 | 0xAC | `DEVICE_PROGRAM_READ` | load a program slot | **Confirmed on hardware** | **overwrites all live device state**; `test_a6_program_slots.py` |
 | 0xB5 | `CHANNEL_COPY` | copy one channel's settings to another | **Confirmed on hardware**, both directions | `hardware_test/test_a5_channel_copy.py` |
@@ -314,8 +318,11 @@ the other blocks only the whole-block write is used or tested.
 ### FIR enumerations
 
 FIR filter type (`set_fir(fir_type=...)`): 0 = low-pass, 1 = high-pass,
-2 = band-pass, 3 = band-stop, 4 = all-pass. Only 0 and 1 have been tested
-on hardware.
+2 = band-pass, 5 = the channel's coefficient block (see "FIR coefficient
+backup and restore"). The device stores 5 as 6, and a written 6 acts the
+same. These are the only values the manufacturer's app sends (6 when it
+re-sends a stored type), so the client rejects 3 and 4. 0, 1, 5 and 6 are
+confirmed on hardware; 2 is untested.
 
 FIR window type (`set_fir(win_type=...)`), in the order the manufacturer's
 app lists them: 0 = Kaiser, 1 = Hanning, 2 = Hamming, 3 = Blackman,
@@ -550,7 +557,7 @@ ranges (for example a disabled compressor stores ratio 0 and threshold
 | Input source select | 0-3 |
 | FIR low/high frequency | 10-20000 Hz |
 | FIR attenuation | 21-120 dB |
-| FIR type | 0-4 |
+| FIR type | 0, 1, 2, 5, 6 |
 | FIR window type | 0-11 |
 | FIR order index | 0-1 (`set_fir`) |
 | Frequency-shifter level / direction | 0-5 / 0-1 |
@@ -1044,16 +1051,17 @@ Inputs and outputs. One 9-byte parameter block, `data_id=0`:
 | Offset | Field | Encoding |
 |---|---|---|
 | 0 | enable | u8, 0/1, not inverted |
-| 1 | filter type | u8: 0 = low-pass, 1 = high-pass, 2 = band-pass, 3 = band-stop, 4 = all-pass |
+| 1 | filter type | u8: 0 = low-pass, 1 = high-pass, 2 = band-pass, 5 = coefficient block (stored as 6) |
 | 2 | window | u8, 0-11 (see "FIR enumerations") |
 | 3 | low frequency | u16, raw = Hz, 10-20000 |
 | 5 | high frequency | u16, raw = Hz, 10-20000 |
 | 7 | attenuation | u8, `raw = dB - 21`, 21-120 dB |
 | 8 | order | u8 index: 0 = 256 taps, 1 = 512 taps |
 
-The per-channel coefficient block (0xC8/0xC9) is separate from these
-parameters; see "Whole-device operations". The manufacturer's app's
-default FIR settings are window Kaiser and order 512.
+Type 5 runs the channel's coefficient block (0xC8/0xC9) instead of a
+designed filter, and only after the block is written; see "FIR coefficient
+backup and restore". The manufacturer's app's default FIR settings are
+window Kaiser and order 512.
 
 **Confirmed on hardware:**
 
@@ -1062,7 +1070,7 @@ default FIR settings are window Kaiser and order 512.
   high-pass shapes. Which frequency field is the corner had to be
   measured: for low-pass the **low** frequency is the corner and the high
   frequency has no effect; for high-pass the **high** frequency is the
-  corner and the low frequency has no effect. Types 2-4 are untested.
+  corner and the low frequency has no effect. Type 2 is untested.
 - **Window** (`hardware_test/test_a7_fir_win_type.py`): next to the
   transition (2100-2300 Hz, just above a 2000 Hz corner), window 5
   measured about 9-10 dB *less* attenuated than windows 1 and 2 (for
@@ -1096,6 +1104,9 @@ default FIR settings are window Kaiser and order 512.
   linear phase and adds 2.662 ms (256 taps) or 3.995 ms (512 taps). A
   Kaiser-window write at 21 dB attenuation on any channel also adds 0.667
   ms to every path; see "Latency".
+- **Coefficient block** (`hardware_test/test_b0_fir_coefficients.py`):
+  type 5 convolves the channel with its coefficient block; see "FIR
+  coefficient backup and restore".
 
 Exposed as `registry.FIR_IN`/`FIR_OUT` + `Client.set_fir(channel_id, *,
 enabled, fir_type, win_type, freq_low_hz, freq_high_hz, attenuation_db,
@@ -1154,7 +1165,9 @@ required) and CLI `set-freq-shifter`.
 names come from 0xCA). `load_program` **overwrites every channel's live
 settings at once**, the largest blast radius of any implemented operation.
 It does not re-read FIR coefficients afterwards; call `read_fir_coefs` per
-channel if you need them.
+channel if you need them. Writes change only the live settings, which a
+power cycle discards; save them to a slot to keep them (see "A power cycle
+discards live changes").
 
 **Confirmed on hardware (`hardware_test/test_a6_program_slots.py`, slot 0,
 empty beforehand):** a saved EQ boost (+15 dB at 1 kHz, measured
@@ -1166,15 +1179,73 @@ measuring -22.97 dBFS, within 0.1 dB of the saved state.
 `read_fir_coefs(channel_id, *, output=False)` /
 `write_fir_coefs(channel_id, coefficients, *, output=False)`, CLI
 `read-fir-coefs` / `write-fir-coefs`. Each channel's coefficient block is
-512 little-endian float32 values (2048 bytes). The API keeps the block as
-opaque bytes and assigns no tap semantics. Enabling a parameter-designed FIR
-leaves the block unchanged: on input A and output 1, with the FIR enabled at
-either order, it read back as the same unit impulse
+512 little-endian float32 values (2048 bytes): the taps that FIR type 5
+applies. The client sends and returns the bytes unchanged, so a backup
+restores exactly. Enabling a parameter-designed FIR leaves the block
+unchanged: on input A and output 1, with the FIR enabled at either order,
+it read back as the same unit impulse
 (`hardware_test/test_a9_base_latency.py`), so the designed coefficients are
 not readable through 0xC8. Restore rejects any payload that
 is not exactly 2048 bytes or contains a non-finite float32, sends one
 complete block with `user_id=0` and the channel address, and the CLI
 command immediately reads the block back and checks it exactly.
+
+**What the block does: confirmed on hardware
+(`hardware_test/test_b0_fir_coefficients.py`)**, on output 1 and input A,
+against the bypass reference described under "Latency":
+
+- With the FIR enabled and type 5, the channel is convolved with the
+  block, tap 0 first, at 96 kHz. A 1.0 at tap d adds 128 + d samples
+  (measured 128.02, 228.03 and 328.04 for d = 0, 100 and 200), the same in
+  every band from 200 Hz to 10 kHz. The 128 samples are the fixed extra a
+  designed FIR also adds (see "Latency"), so a unit impulse at tap 0 is a
+  pure 1.333 ms delay.
+- Values are used as given, not normalised: 1.0 at tap 0 measured
+  0.00 dB, 0.5 measured -6.02 dB, and -0.5 measured -6.02 dB with the
+  polarity inverted. An all-zero block silences the channel (61 dB down,
+  at the measurement floor).
+- Order index 0 uses the first 256 values and index 1 all 512. An impulse
+  at tap 300 is silent at index 0 (-60.7 dB) and passes at unity gain at
+  index 1, as does one at tap 511. The manufacturer's app imports 256
+  values for index 0 and 512 for index 1.
+- Window, frequencies and attenuation do not affect the block. Changing
+  them, changing the order (with the impulse inside both lengths) or
+  turning the FIR off and on again kept the same delay and level.
+- A disabled FIR ignores the block, and so do the designed types: with a
+  512-tap type-0 low-pass, a block holding an impulse at tap 100 left the
+  added delay at the designed filter's 3.995 ms.
+
+**Write the block after selecting type 5.** Selecting type 5 does not
+load the block. The filter that ran before keeps running until a block is
+written: a designed 20 kHz low-pass stayed in place even when the type-5
+write carried a 12 kHz corner. The manufacturer's app imports
+coefficients the same way. It writes the FIR parameters with type 5,
+waits 50 ms, then sends 0xC9 for the same channel. Once a block is
+loaded, later parameter writes with type 5 or 6 keep it. To run your own
+coefficients:
+
+```sh
+uv run sinbosen-la548 set-fir <ip> 0 on --type 5 --win-type 0 --freq-low 1000 --freq-high 1000 --atten 60 --order 1
+uv run sinbosen-la548 write-fir-coefs <ip> 0 taps.bin
+```
+
+`taps.bin` holds 512 float32 little-endian values; with `--order 0` only
+the first 256 are used. The manufacturer's app imports and exports the
+same block as a text file with one value per line, 256 or 512 lines to
+match the order. Like every live write, the block and the type-5 selection
+are lost at power-off unless saved to a program slot (see "A power cycle
+discards live changes"). Whether a program slot keeps the block, and
+applies it again on load, has not been tested.
+
+**The device stores type 5 as 6.** A settings readback after writing 5
+shows 6, and writing 6 back stores 6 and behaves the same. The
+manufacturer's app treats any stored value of 5 or more as its
+coefficient type and re-sends the stored 6 with later FIR edits, so
+`set_fir` accepts 6 too.
+
+**Contents as first read.** On the unit measured, inputs A-D and outputs
+1-4 held a unit impulse and outputs 5-8 held all zeros, so type 5 on
+outputs 5-8 is silent until a block is written.
 
 **Confirmed by readback.** An unchanged output-2 block first completed an
 idempotent write/read cycle. Separate output-2 and input-B trials then
@@ -1288,6 +1359,43 @@ shows its IP address; **entering it manually
 
 ## Known device behaviour and open questions
 
+### A power cycle discards live changes
+
+Writes change the live settings only. After a power cycle the unit came
+back with an earlier stored state instead. Output 1's FIR parameters
+(type 6, enabled) and its coefficient block (an impulse at tap 100),
+written a few minutes before power-off, were back to their earlier values
+(type 0, disabled, and a unit impulse). The settings snapshot matched the
+state from before those writes in every control but one, which was not
+recorded. The manufacturer's manual describes the same model: saving and
+loading programs is "the memory and call of system parameter settings",
+changes made on the panel are kept by saving them from the system menu or
+the PC, and only the volume "is automatically saved in real time".
+
+To keep a configuration, save it to a program slot (`save_program`, CLI
+`save-program`).
+
+**The unit powers on into its current program.** Saving or loading a slot
+makes that slot current. After a save to slot 29 the front panel showed
+"Scene: User30" (slots are numbered from 1 on the panel), and HandShake and
+ReadGroup replies carried `user_id` 29. After a power cycle the settings
+snapshot matched the snapshot taken just before that save in every
+control. Before the save the current program was slot 0, and the earlier
+power cycle came back in slot 0's state. A later load of slot 0 switched
+the replies' `user_id` from 29 to 0 at the load's ack.
+
+**A program slot keeps the FIR coefficient blocks.** The slot-29 save
+included output 1 at FIR type 6 with an impulse at tap 100. After the power
+cycle, output 1's block read back as that impulse, the other 11 blocks were
+unchanged, and output 1 measured 292.03 samples slower than with the FIR
+off: the 228 samples of the block (128 + 100) plus 64.03. Loading slot 0
+then put back all 12 of slot 0's blocks and turned output 1's FIR off, and
+the path still measured 64.00 samples slower than the FIR-off baseline. So
+the extra 64 is not part of the block. It matches the Kaiser 21 dB latency
+state (see "Latency"), and no FIR write had been made since power-on.
+Whether loading a slot whose FIR is at type 5 applies its block has not
+been tested.
+
 ### Processing blocks can wedge until a power cycle
 
 A processing block can stop affecting the audio while still acknowledging
@@ -1317,14 +1425,18 @@ power-cycle the unit before suspecting a jack, cable or converter.
 
 ### Network outages
 
-The unit became unreachable on the network (no ping replies) twice during
-long test sessions. Once was
+The unit became unreachable on the network (no ping replies) three times
+during long test sessions. Once was
 right after rapid automated connect/disconnect cycling (several `Client`
 sessions opened and torn down within a couple of seconds), a traffic
-pattern worth avoiding. The other came after about 20 minutes with no
-traffic at all, so client traffic did not cause it. Both recovered with no
-lasting configuration change. The 0xD9 trial is not related: the device
-stayed reachable throughout it.
+pattern worth avoiding. Another came after about 20 minutes with no
+traffic at all, so client traffic did not cause it. The third came right
+after one 0xD9 request sent past the client's refusal, followed by three
+`Client` sessions within about a minute: the unit stopped answering ping
+and ARP while its front panel kept working. The first 0xD9 trial kept the
+device reachable throughout, so this one event doesn't show which of the
+two caused it. All three recovered with a power cycle and no lasting
+configuration change.
 
 ### Latency
 
@@ -1345,8 +1457,10 @@ it as it is. The state follows the most recent such write on any channel,
 with the FIR enabled or not, including channels outside the measured path
 (output 8, input D). A volume write does not change it. 21 dB is where the
 standard Kaiser formula gives beta = 0, a rectangular window. Every FIR
-block on the unit measured was stored at Kaiser 21 dB; the state at power-on
-was not tested. To get the shorter latency, make the last Kaiser-window FIR
+block on the unit measured was stored at Kaiser 21 dB. After a power
+cycle, with no FIR write since, every measurement was 64 samples slower
+than expected: the state appears to be set at power-on or by a program
+load (see "A power cycle discards live changes"). To get the shorter latency, make the last Kaiser-window FIR
 write use more than 21 dB, on any channel and with the FIR enabled or not.
 
 **Enabled FIR.** An enabled FIR adds (N - 1) / 2 + 128 samples at 96 kHz to
@@ -1354,7 +1468,10 @@ its channel: **2.662 ms** for 256 taps (order index 0) and **3.995 ms** for
 512 taps (index 1). The (N - 1) / 2 part is a symmetric FIR's group delay;
 the 128 samples are a fixed extra. Input A and output 1 measured the same.
 With a 20 kHz low-pass, the added delay was the same from 200 Hz to 10 kHz
-within 1 µs, so the FIR is linear phase.
+within 1 µs, so the FIR is linear phase. With type 5 the FIR adds the same
+128 samples plus its coefficient block's own delay: 1.333 ms for a unit
+impulse at tap 0 (`hardware_test/test_b0_fir_coefficients.py`, see "FIR
+coefficient backup and restore").
 
 **Delay elsewhere.** A 1 ms or 1000 ms delay on output 2 or on input B moved
 output 1's latency by less than 0.1 µs.
@@ -1451,13 +1568,15 @@ These pitfalls produced false results during hardware testing:
   and 19; other values are unmapped.
 - HandShake reply: per-channel meter offsets.
 - Settings snapshot: many inner fields remain unresolved (for example two
-  base-block bytes); FIR coefficient blocks are treated as opaque.
+  base-block bytes).
 - EQ slope values other than 0/1 for non-shelf types; Dynamic EQ types 3
-  and 4; FIR types 2-4; FIR windows other than 0, 1, 2 and 5.
+  and 4; FIR type 2 (band-pass); FIR windows other than 0, 1, 2 and 5.
+- Whether loading a program slot whose FIR is at type 5 applies its
+  coefficient block (loading restores the blocks themselves).
 - Polarity direction (which raw value is 0°).
 - Volume above +12 dB.
 - Delay: more than two channels delayed at once.
 - Latency of input/output pairs other than A to 1, and with FIR enabled on
-  both ends of one path; whether the Kaiser 21 dB latency state is set at
-  power-on.
+  both ends of one path; whether the Kaiser 21 dB latency state comes from
+  power-on itself or from the stored FIR blocks.
 - Individual mix crosspoints beyond those exercised.

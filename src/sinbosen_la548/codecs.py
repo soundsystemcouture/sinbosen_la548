@@ -630,17 +630,23 @@ def _encode_fir(fields: tuple[bool, int, int, int, int, float, int]) -> bytes:
     # is always one 0xA4 payload, whichever field changed.
     #
     # filter type: raw u8, 0=low-pass, 1=high-pass (both confirmed on
-    # hardware, hardware_test/test_a3_fir.py), 2=band-pass, 3=band-stop,
-    # 4=all-pass (unverified). window type (window function) and order
-    # (tap-count selector) are raw u8 too - see docs/PROTOCOL.md's FIR
-    # section for the candidate window mapping and what's confirmed on
+    # hardware, hardware_test/test_a3_fir.py), 2=band-pass (untested),
+    # 5=the channel's coefficient block (read_fir_coefs/write_fir_coefs,
+    # see docs/PROTOCOL.md). The device stores 5 as 6, and 6 written back
+    # behaves the same (hardware_test/test_b0_fir_coefficients.py), so
+    # both are accepted and a readback can be written back unchanged.
+    # These are the only values the manufacturer's app sends: 5 when the
+    # coefficient type is selected, 6 when it re-sends a stored type. 3
+    # and 4 are rejected. window type (window function) and order
+    # (tap-count selector) are raw u8 too - see docs/PROTOCOL.md's
+    # FIR section for the candidate window mapping and what's confirmed on
     # hardware vs. still open (hardware_test/test_a7_fir_win_type.py,
     # test_a8_fir_order.py). The two frequencies are raw Hz u16 with no
     # formula, range 10-20000 Hz (FIR_FREQ_HZ). Attenuation: raw = dB -
     # 21.0, range 21-120 dB (FIR_ATTENUATION_DB).
     enabled, fir_type, win_type, freq_low_hz, freq_high_hz, attenuation_db, order_index = fields
-    if not 0 <= fir_type <= 4:
-        raise ValueError(f"FIR filter type out of range: {fir_type} (0-4)")
+    if fir_type not in (0, 1, 2, 5, 6):
+        raise ValueError(f"FIR filter type out of range: {fir_type} (0, 1, 2, 5 or 6)")
     # The manufacturer's app offers exactly 12 window types (0=Kaiser..
     # 11=sine, see docs/PROTOCOL.md) - same reasoning as eq_type's 0-5 check
     # in _encode_eq_struct, independent of hardware confirmation. The order

@@ -32,10 +32,11 @@ HELP = {
                     "signal entirely.",
     "frequency_shifter": "Input only. Level 0–5; direction 0 down, 1 up. Omitted from static response plots.",
     "fir": "FIR type 0 low-pass (freq_low_hz is the corner), 1 high-pass (freq_high_hz is the corner), "
-           "2 band-pass, 3 band-stop, 4 all-pass. Window indices 0–11 follow the manufacturer's app's list; "
-           "0 is the Kaiser candidate. On the DA0408X, order index 0 selects 256 taps and 1 selects 512 taps "
-           "for both inputs and outputs. Coefficient backups can be downloaded and restored; enabled FIR makes "
-           "plotted totals incomplete.",
+           "2 band-pass, 5 the channel's coefficient block (used once a block is restored after applying 5; "
+           "reads back as 6). Window indices 0–11 follow the manufacturer's app's "
+           "list; 0 is the Kaiser candidate. On the DA0408X, order index 0 selects 256 taps and 1 selects 512 "
+           "taps for both inputs and outputs. Coefficient backups can be downloaded and restored. Plots do not "
+           "include an enabled FIR.",
 }
 
 

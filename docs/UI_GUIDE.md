@@ -170,16 +170,21 @@ readback may contain out-of-range dynamics values: replace those with valid valu
 before staging that block. Unused dynamics bytes are preserved by refusing writes
 when the current client cannot preserve them.
 
-Block descriptions explain verified enums and remaining uncertainty. FIR uses an
-isolated adapter to the current client codec, including LP/HP corner-field behavior.
-On the DA0408X, order index 0 selects 256 taps and index 1 selects 512 taps for both
-inputs and outputs. The management tab can download or restore the selected
-channel's exact 2048-byte coefficient backup. Restore validates all 512 float32
-values locally, requires a clean unlocked device, verifies exact coefficient
-readback and an unchanged settings snapshot, and attempts rollback after a readable
-mismatch. Enabled FIR remains an omitted response-model stage; it is linear phase
-and delays its channel by 2.662 ms (256 taps) or 3.995 ms (512 taps), which the
-alignment view does not include.
+Block descriptions explain verified enums and remaining uncertainty, including
+which FIR frequency field is the low-pass and high-pass corner. On the DA0408X,
+order index 0 selects 256 taps and index 1 selects 512 taps for both inputs and
+outputs. The management tab can download or restore the selected channel's exact
+2048-byte coefficient block. Restore validates all 512 float32 values locally,
+requires a clean unlocked device, verifies exact coefficient readback and an
+unchanged settings snapshot, and attempts rollback after a readable mismatch.
+
+FIR type 5 runs the channel's coefficient block instead of a designed filter, but
+only once a block has been written after selecting it: apply type 5, then restore
+a coefficient block to that channel. It reads back as type 6, which can be written
+back unchanged. Plots do not include an enabled FIR. The designed types are
+linear phase and delay their channel by 2.662 ms (256 taps) or 3.995 ms (512
+taps); type 5 delays by 1.333 ms plus the block's own delay. The alignment view
+does not include either delay.
 
 Local preset JSON is versioned and profile-specific. Export captures the draft's
 supported controls; import stages changes with Live off. Presets omit names,
@@ -187,7 +192,10 @@ unknown fields, program contents, and separate FIR coefficient payloads. Import
 refuses incompatible profiles, structure, and malformed values.
 
 The DA0408X exposes 30 program slots with zero-based wire indices 0–29. Save records
-current device settings, while load replaces all channels and routes. Channel copy
+current device settings, while load replaces all channels and routes. Applied changes
+live only in the unit's working settings and are lost at power-off unless saved to a
+slot. The unit powers on into its current program, shown on its front panel as
+"Scene: UserN"; saving or loading a slot makes that slot current. Channel copy
 is within the selected input/output direction. Review
 destinations with **Review destinations** and confirm before execution; pending drafts must be applied or
 reverted. Each operation disables Live and reloads actual settings, including
